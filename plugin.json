@@ -1,0 +1,46 @@
+{
+  "id": "house-builder",
+  "version": "0.1.0",
+  "name": "House Builder (test)",
+  "description": "A test plugin: builds a small house with walls, a floor, a door, a window, a room, a roof and a note, and reports on the composition of the model.",
+  "abi": 1,
+  "module": "house_builder.wasm",
+  "author": "BIMCraft test",
+  "license": "MIT OR Apache-2.0",
+  "permissions": [],
+  "functions": [
+    {
+      "id": "build",
+      "label": "Build House",
+      "description": "Builds a house: four walls, a floor, a door, a window, a room, a roof and a text note. One undo step.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "The south-west corner in plan mm; [0, 0] without it"
+          },
+          "width": {"type": "number", "minimum": 2000, "maximum": 50000, "description": "East-west, mm; 8000 without it"},
+          "depth": {"type": "number", "minimum": 2000, "maximum": 50000, "description": "North-south, mm; 6000 without it"},
+          "height": {"type": "number", "minimum": 1000, "maximum": 20000, "description": "Wall height in mm; unconnected if given, else up to the level above"},
+          "room": {"type": "string", "description": "The room's name; Living Room without it"}
+        }
+      },
+      "tab": "Test Plugins",
+      "panel": "House",
+      "order": 1
+    },
+    {
+      "id": "check",
+      "label": "Check House",
+      "description": "Reads the model and answers with a human-readable `report`: levels, elements by category, rooms, walls, openings, floors, roofs, notes, warnings and history. The window shows it. No undo step.",
+      "params": {"type": "object"},
+      "tab": "Test Plugins",
+      "panel": "House",
+      "order": 2
+    }
+  ]
+}
