@@ -1,0 +1,24 @@
+[package]
+name = "house-builder"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "A test BIMCraft plugin that builds a small house: walls, floor, roof, a door, a window, a room and a note"
+
+# A plugin is a module of its own, not a member of BIMCraft's workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The SDK of the checkout this test lives beside.
+bimcraft-plugin-sdk = { path = "../BIMCraft-plugins-clean/crates/plugin-sdk" }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+strip = true
