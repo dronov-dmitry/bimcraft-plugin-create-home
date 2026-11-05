@@ -7,7 +7,7 @@
   "module": "house_builder.wasm",
   "author": "BIMCraft test",
   "license": "MIT OR Apache-2.0",
-  "permissions": [],
+  "permissions": ["files"],
   "functions": [
     {
       "id": "build",
@@ -41,6 +41,21 @@
       "tab": "Test Plugins",
       "panel": "House",
       "order": 2
+    },
+    {
+      "id": "open_file",
+      "label": "Open File",
+      "description": "Opens a project file by absolute path from anywhere on the disk (.bimcraft or .ifc), replacing the project. Needs the `files` permission. Answers with a `report`.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "The file to open, e.g. /home/user/models/House.bimcraft"}
+        },
+        "required": ["path"]
+      },
+      "tab": "Test Plugins",
+      "panel": "House",
+      "order": 3
     }
   ]
 }

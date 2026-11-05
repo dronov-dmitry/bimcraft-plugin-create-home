@@ -460,7 +460,31 @@ fn check(_: &Value) -> Result<Value, String> {
     Ok(json!({"report": report, "counts": counts}))
 }
 
+/// `open_file`: reads a project file from anywhere on the disk into the session, through `open`.
+///
+/// This one reaches the disk, so it only works when the plugin is given the `files` permission; the sandbox
+/// refuses `open` before it runs otherwise and the error says exactly that. `open` replaces the project, so the
+/// call is not an undo step: the history starts again with the file's own.
+fn open_file(params: &Value) -> Result<Value, String> {
+    let path = params
+        .get("path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .ok_or("`path` is required: the project file to open (.bimcraft or .ifc)")?;
+    info_log(&format!("opening {path}"));
+    let reply = execute("open", &json!({"path": path}))?;
+    // What the file brought in, as the model counts it now.
+    let model = execute("inspect", &json!({"brief": true})).unwrap_or(Value::Null);
+    let counts = model.get("counts").cloned().unwrap_or(Value::Null);
+    let total: u64 = counts.as_object().map(|c| c.values().filter_map(Value::as_u64).sum()).unwrap_or(0);
+    let name = model.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+    info_log(&format!("opened {path}: {total} elements"));
+    Ok(json!({"report": format!("OPENED {path}\n  project: {name}\n  elements: {total}"), "path": path, "name": name, "counts": counts, "open": reply}))
+}
+
 bimcraft_plugin_sdk::export! {
     "build" => build,
     "check" => check,
+    "open_file" => open_file,
 }
