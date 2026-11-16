@@ -1,6 +1,6 @@
 [package]
 name = "house-builder"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
@@ -13,8 +13,8 @@ description = "A test BIMCraft plugin that builds a small house: walls, floor, r
 crate-type = ["cdylib"]
 
 [dependencies]
-# The SDK of the checkout this test lives beside.
-bimcraft-plugin-sdk = { path = "../BIMCraft-plugins-clean/crates/plugin-sdk" }
+# A vendored copy of BIMCraft's SDK, so the repository builds without a checkout.
+bimcraft-plugin-sdk = { path = "vendor/plugin-sdk" }
 serde_json = "1"
 
 [profile.release]

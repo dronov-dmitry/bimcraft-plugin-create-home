@@ -1,0 +1,86 @@
+name: release
+
+# Tag a commit (`git tag v0.2.0 && git push origin v0.2.0`) and this builds the
+# module, packs the update archive, signs the feed and publishes a GitHub
+# release with three assets:
+#
+#   house-builder-<version>.zip  the archive the feed points at
+#   house-builder.zip            the same archive under a stable name, so
+#                                releases/latest/download/house-builder.zip works
+#   latest.json                  the signed feed behind releases/latest/download/latest.json
+#
+# The archive holds exactly plugin.json and the module: BIMCraft refuses an
+# update archive with any other file.
+#
+# Secret: PLUGIN_SIGNING_KEY — the Ed25519 private key in PEM (see scripts/make-signing-key.sh).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Check the tag against the manifest
+        run: |
+          VERSION="$(python3 -c 'import json;print(json.load(open("plugin.json"))["version"])')"
+          if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
+            echo "::error::the tag ${GITHUB_REF_NAME} and plugin.json ${VERSION} disagree"
+            exit 1
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "MODULE=$(python3 -c 'import json;print(json.load(open("plugin.json"))["module"])')" >> "$GITHUB_ENV"
+
+      - name: Install the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build the module
+        run: cargo build --release --locked --target wasm32-unknown-unknown
+
+      - name: Pack the update archive
+        run: |
+          mkdir -p dist/stage
+          cp plugin.json dist/stage/plugin.json
+          BUILT="$(find target/wasm32-unknown-unknown/release -maxdepth 1 -name '*.wasm' | head -n 1)"
+          if [ -z "${BUILT}" ]; then
+            echo "::error::the build produced no module"
+            exit 1
+          fi
+          cp "${BUILT}" "dist/stage/${MODULE}"
+          (cd dist/stage && zip -q -r "../house-builder-${VERSION}.zip" .)
+          cp "dist/house-builder-${VERSION}.zip" dist/house-builder.zip
+          unzip -l "dist/house-builder-${VERSION}.zip"
+
+      - name: Build and sign the feed
+        env:
+          PLUGIN_SIGNING_KEY: ${{ secrets.PLUGIN_SIGNING_KEY }}
+        run: |
+          if [ -z "${PLUGIN_SIGNING_KEY}" ]; then
+            echo "::error::add the repository secret PLUGIN_SIGNING_KEY (scripts/make-signing-key.sh prints it)"
+            exit 1
+          fi
+          KEY="${RUNNER_TEMP}/signing-key.pem"
+          umask 077
+          printf '%s\n' "${PLUGIN_SIGNING_KEY}" > "${KEY}"
+          FEED_NOTES="$(git tag -l --format='%(contents:subject)' "${GITHUB_REF_NAME}")"
+          export FEED_NOTES="${FEED_NOTES:-House Builder ${VERSION}}"
+          FEED_KEY="${KEY}" python3 scripts/make-feed.py
+          rm -f "${KEY}"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${VERSION}" \
+            "dist/house-builder-${VERSION}.zip" \
+            "dist/house-builder.zip" \
+            "dist/latest.json" \
+            --title "House Builder ${VERSION}" \
+            --generate-notes

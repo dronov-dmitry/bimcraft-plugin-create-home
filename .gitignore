@@ -1,0 +1,8 @@
+# Build artifacts: the release workflow builds the module, nothing here is shipped.
+/target/
+
+# The publisher's signing key lives only on the maintainer's machine and in the
+# GitHub secret PLUGIN_SIGNING_KEY, never in the repository.
+/keys/
+*.pem
+/dist/

@@ -1,13 +1,17 @@
 {
   "id": "house-builder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "House Builder (test)",
   "description": "A test plugin: builds a small house with walls, a floor, a door, a window, a room, a roof and a note, and reports on the composition of the model.",
   "abi": 1,
   "module": "house_builder.wasm",
   "author": "BIMCraft test",
   "license": "MIT OR Apache-2.0",
-  "permissions": ["files"],
+  "permissions": ["files", "update"],
+  "update": {
+    "feed": "https://github.com/dronov-dmitry/bimcraft-plugin-create-home/releases/latest/download/latest.json",
+    "public_key": "ed25519:wZadJhhSSUG+bQwWLo2caMWPxSU5OCeYajloeoqTQUU="
+  },
   "functions": [
     {
       "id": "build",
@@ -56,6 +60,23 @@
       "tab": "Test Plugins",
       "panel": "House",
       "order": 3
+    },
+    {
+      "id": "update",
+      "label": "Update Plugin",
+      "description": "Asks the release channel for the newest version and answers with `current`, `available`, `released`, `notes`, `host` and `key`; with `install` true it installs it. Needs the `update` permission.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "install": {
+            "type": "boolean",
+            "description": "Install the version the channel announces; false or omitted only checks"
+          }
+        }
+      },
+      "tab": "Test Plugins",
+      "panel": "House",
+      "order": 4
     }
   ]
 }

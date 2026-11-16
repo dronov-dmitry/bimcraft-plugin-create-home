@@ -4,7 +4,7 @@
 //! whole call is one undo step and a failure in the middle takes all of it back. It reads the model with the same
 //! `elements` command in `check`, which answers with a `report` the window opens on screen.
 
-use bimcraft_plugin_sdk::{Value, execute, host_info, info_log};
+use bimcraft_plugin_sdk::{Value, apply_update, check_update, execute, host_info, info_log};
 use serde_json::json;
 
 fn number(params: &Value, key: &str, default: f64, min: f64, max: f64) -> Result<f64, String> {
@@ -483,8 +483,32 @@ fn open_file(params: &Value) -> Result<Value, String> {
     Ok(json!({"report": format!("OPENED {path}\n  project: {name}\n  elements: {total}"), "path": path, "name": name, "counts": counts, "open": reply}))
 }
 
+/// `update`: what the plugin's own release channel announces, and installing it on request.
+///
+/// The plugin has no network and no disk: the host reads the feed declared in `plugin.json` and replaces the
+/// folder. The `update` permission is the user's, and the host asks before the first install; with automatic
+/// updating on, newer versions are installed without a call from here. The new module runs after a restart, so
+/// this answers with what happened rather than with a reload.
+fn update(params: &Value) -> Result<Value, String> {
+    let install = params.get("install").and_then(Value::as_bool).unwrap_or(false);
+    let checked = check_update()?;
+    let current = checked.get("current").and_then(Value::as_str).unwrap_or("").to_string();
+    let available = checked.get("available").and_then(Value::as_str).unwrap_or(&current).to_string();
+    let newer = available != current;
+    info_log(&format!("the channel has {available}; this build is {current}"));
+
+    let mut reply = json!({"current": current, "available": available, "upToDate": !newer, "channel": checked});
+    if install && newer {
+        // A refusal is the user's, and the host words it; it comes back as an `Err` here.
+        reply["installed"] = apply_update()?;
+        reply["restart"] = json!(true);
+    }
+    Ok(reply)
+}
+
 bimcraft_plugin_sdk::export! {
     "build" => build,
     "check" => check,
     "open_file" => open_file,
+    "update" => update,
 }

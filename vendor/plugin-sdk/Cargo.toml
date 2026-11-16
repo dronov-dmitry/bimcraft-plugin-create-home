@@ -1,0 +1,16 @@
+[package]
+name = "bimcraft-plugin-sdk"
+description = "The guest SDK of BIMCraft's WASM plugins: the host ABI's typed calls, the entry points and the manifest's shape"
+# Vendored copy of BIMCraft's crates/plugin-sdk, so this repository builds on its own.
+version = "0.12.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+serde_json = "1"
+
+[lib]
+# A plugin is a module: the SDK is linked into it as an ordinary library.
+path = "src/lib.rs"

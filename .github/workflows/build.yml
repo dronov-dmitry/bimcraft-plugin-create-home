@@ -1,0 +1,68 @@
+name: build
+
+# Builds the module on every change, so a broken plugin is caught long before a
+# release tag: the same steps the release workflow runs, without publishing.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build the module
+        run: cargo build --release --locked --target wasm32-unknown-unknown
+
+      - name: Check the manifest
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import pathlib
+          import sys
+
+          data = json.loads(pathlib.Path("plugin.json").read_text(encoding="utf-8"))
+          problems = []
+
+          update = data.get("update")
+          permissions = data.get("permissions", [])
+          if ("update" in permissions) != bool(update):
+              problems.append("the `update` permission and the `update` block must come together")
+          if update:
+              feed = update.get("feed", "")
+              if not feed.startswith("https://") or "#" in feed or "@" in feed:
+                  problems.append(f"the update feed must be an https URL without login or fragment: {feed}")
+              key = update.get("public_key", "").removeprefix("ed25519:")
+              try:
+                  if len(base64.b64decode(key, validate=True)) != 32:
+                      problems.append("the update public key must be 32 bytes")
+              except ValueError:
+                  problems.append("the update public key isn't base64")
+
+          ids = [function.get("id") for function in data.get("functions", [])]
+          if len(ids) != len(set(ids)):
+              problems.append(f"function ids repeat: {ids}")
+
+          module = pathlib.Path(data.get("module", ""))
+          built = pathlib.Path("target/wasm32-unknown-unknown/release") / module.name
+          if not built.is_file():
+              problems.append(f"the build has no {module.name}")
+          elif built.read_bytes()[:4] != b"\x00asm":
+              problems.append(f"{module.name} is not a WebAssembly module")
+
+          if problems:
+              print("\n".join(f"::error::{problem}" for problem in problems))
+              sys.exit(1)
+          print(f"manifest and module agree: {data['id']} {data['version']}, ABI {data['abi']}")
+          PY
