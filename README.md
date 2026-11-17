@@ -8,8 +8,10 @@ if any command fails, the plugin returns an error and rolls back the whole call.
 
 Video: https://youtu.be/OuOVO3mU8HE
 
-The plugin is published on GitHub as a release, so it goes in with **one terminal command** and then
-**updates itself** from those releases once you allow that in BIMCraft: see
+The plugin is published on GitHub as a release, so it goes in with **one terminal command**.
+By default it is built for every ABI 1 host: it imports only `execute`, `log` and `info`, so the same
+module runs in BIMCraft builds with and without plugin self-update. Self-update is an optional Cargo
+feature (`--features self-update`) for hosts that link `update_check` and `update_apply`: see
 [Installation](#installation) and [Releases and self-update](#releases-and-self-update).
 
 > **Important:** BIMCraft **does not execute `src/lib.rs`**. A plugin is `plugin.json` plus a compiled
@@ -33,8 +35,8 @@ The plugin is published on GitHub as a release, so it goes in with **one termina
 
 ```text
 test-plugin-house/
-├── plugin.json          manifest: id house-builder, ABI 1, four functions, `files` and `update`
-├── house_builder.wasm   compiled module (wasm32-unknown-unknown, release)
+├── plugin.json          manifest: id house-builder, ABI 1, three functions, the `files` permission
+├── house_builder.wasm   compiled module (wasm32-unknown-unknown, release; no self-update imports)
 ├── Cargo.toml           plugin sources (separate cdylib, SDK taken from vendor/)
 ├── vendor/plugin-sdk/   a copy of BIMCraft's crates/plugin-sdk, so the build needs no checkout
 ├── .github/workflows/
@@ -49,7 +51,7 @@ test-plugin-house/
 │   ├── build-wasm.sh    runs the build (keeps the terminal window open)
 │   ├── build-wasm.py    interactive .wasm build from src/lib.rs
 │   └── test-plugin.sh   runs the built plugin through bimcraft-cli
-├── src/lib.rs           the build, check, open_file and update functions
+├── src/lib.rs           the build, check and open_file functions; `update` behind `self-update`
 └── keys/                the feed signing key (gitignored, never committed)
 ```
 
@@ -60,7 +62,7 @@ Functions:
 | `plugin:house-builder:build` | builds a house; parameters `at`, `width`, `depth`, `height`, `room` (all optional)                               |
 | `plugin:house-builder:check` | reads the model and returns a **text report** about its contents (`report` and `counts` fields); in the window the report opens in a dialog; it does not create an undo step |
 | `plugin:house-builder:open_file` | **Open File** — opens a project file (`.bimcraft` or `.ifc`) by absolute path, replacing the project; needs the `files` permission |
-| `plugin:house-builder:update` | **Update Plugin** — asks the release channel what the newest version is and answers with `current`, `available`, `released`, `notes`, `host` and `key`; with `install: true` it installs that version; needs the `update` permission |
+| `plugin:house-builder:update` | **Update Plugin** — optional: built only with `--features self-update`, for a BIMCraft that links `update_check`/`update_apply`. Asks the release channel what the newest version is and answers with `current`, `available`, `released`, `notes`, `host` and `key`; with `install: true` it installs that version; needs the `update` permission |
 
 ### The Check House report
 
@@ -171,8 +173,8 @@ The list must contain `plugin:house-builder:build` and `plugin:house-builder:che
 ## How to check it in the UI
 
 1. Launch the desktop (with `BIMCRAFT_PLUGINS=...` or after copying into the plugins folder).
-2. Open **Manage > Plugins**. The list will show `House Builder (test) 0.2.0`, status **Loaded**,
-   author `BIMCraft test`, four functions; the description mentions the `files` and `update` requests;
+2. Open **Manage > Plugins**. The list will show `House Builder (test) 0.3.0`, status **Loaded**,
+   author `BIMCraft test`, three functions; the description mentions the `files` request;
    below that is the load log.
 3. A **Test Plugins** tab appears in the ribbon with a **House** panel and the **Build House** and **Check House** buttons.
 4. Press **Build House** — walls, a floor, a door, a window, a room and a roof appear on the plan;
@@ -364,11 +366,14 @@ gitignored: a key in the repository would let anyone publish an update the plugi
 
 Rotating the key means a new `public_key` in the manifest; every user is asked to accept the change once.
 
-> **Requires a BIMCraft build with plugin self-update.** The manifest asks for the `update` permission,
-> which arrived with the update channel. Older builds refuse an unknown permission, so the plugin does
-> not load there at all — by design: a plugin that can replace its own code should not load where nobody
-> checks that. Builds without the `update` permission, but with `files`, can still run this plugin if you
-> remove the permission, the `update` block and the `update` function from `plugin.json` and rebuild.
+> **Self-update is optional, and the module in this folder is built without it.** It needs a BIMCraft
+> whose ABI 1 host links `bimcraft.update_check` and `bimcraft.update_apply`; a host with only `execute`,
+> `log` and `info` refuses any module that imports them, even when the function is never called. That is
+> why the default build imports only the three original host functions, and `plugin.json` declares only
+> the `files` permission: the same module and manifest load in both kinds of build. To get the **Update
+> Plugin** button back on a host with self-update, restore the `update` block, the `update` permission and
+> the fourth function in the manifest, then rebuild with `cargo build --target wasm32-unknown-unknown
+> --release --features self-update`.
 
 ## Troubleshooting
 

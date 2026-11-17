@@ -4,7 +4,9 @@
 //! whole call is one undo step and a failure in the middle takes all of it back. It reads the model with the same
 //! `elements` command in `check`, which answers with a `report` the window opens on screen.
 
-use bimcraft_plugin_sdk::{Value, apply_update, check_update, execute, host_info, info_log};
+use bimcraft_plugin_sdk::{Value, execute, host_info, info_log};
+#[cfg(feature = "self-update")]
+use bimcraft_plugin_sdk::{apply_update, check_update};
 use serde_json::json;
 
 fn number(params: &Value, key: &str, default: f64, min: f64, max: f64) -> Result<f64, String> {
@@ -489,6 +491,10 @@ fn open_file(params: &Value) -> Result<Value, String> {
 /// folder. The `update` permission is the user's, and the host asks before the first install; with automatic
 /// updating on, newer versions are installed without a call from here. The new module runs after a restart, so
 /// this answers with what happened rather than with a reload.
+///
+/// This needs a host that links `bimcraft.update_check` and `bimcraft.update_apply`, which is why it is off by
+/// default: a module that imports them is refused by the ABI 1 host that has only `execute`, `log` and `info`.
+#[cfg(feature = "self-update")]
 fn update(params: &Value) -> Result<Value, String> {
     let install = params.get("install").and_then(Value::as_bool).unwrap_or(false);
     let checked = check_update()?;
@@ -506,6 +512,14 @@ fn update(params: &Value) -> Result<Value, String> {
     Ok(reply)
 }
 
+#[cfg(not(feature = "self-update"))]
+bimcraft_plugin_sdk::export! {
+    "build" => build,
+    "check" => check,
+    "open_file" => open_file,
+}
+
+#[cfg(feature = "self-update")]
 bimcraft_plugin_sdk::export! {
     "build" => build,
     "check" => check,

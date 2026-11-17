@@ -8,9 +8,11 @@
 
 Video: https://youtu.be/OuOVO3mU8HE
 
-Плагин публикуется релизом на GitHub, поэтому ставится **одной командой в терминале**, а дальше
-**сам обновляется** из этих релизов, как только вы разрешите это в BIMCraft: см. «Установка» и
-«Релизы и самообновление».
+Плагин публикуется релизом на GitHub, поэтому ставится **одной командой в терминале**.
+По умолчанию он собран для любого хоста ABI 1: модуль импортирует только `execute`, `log` и `info`,
+поэтому один и тот же `.wasm` запускается и в сборках BIMCraft с самообновлением плагинов, и без него.
+Самообновление — необязательная Cargo-фича (`--features self-update`) для хостов, которые
+подключают `update_check` и `update_apply`: см. «Установка» и «Релизы и самообновление».
 
 > **Важно:** для кнопки **Open File** нужна системная BIMCraft ≥ 0.10.0 (в ABI 1 есть разрешение
 > `files` и проверка его песочницей). Установленный в этой системе `/usr/bin/bimcraft` от 3 ноября 2026 —
@@ -38,8 +40,8 @@ Video: https://youtu.be/OuOVO3mU8HE
 
 ```text
 test-plugin-house/
-├── plugin.json          манифест: id house-builder, ABI 1, четыре функции, разрешения files и update
-├── house_builder.wasm   собранный модуль (wasm32-unknown-unknown, release)
+├── plugin.json          манифест: id house-builder, ABI 1, три функции, разрешение files
+├── house_builder.wasm   собранный модуль (wasm32-unknown-unknown, release; без импортов self-update)
 ├── Cargo.toml           исходник плагина (отдельный cdylib, SDK берётся из vendor/)
 ├── vendor/plugin-sdk/   копия crates/plugin-sdk из BIMCraft, чтобы сборке не нужен был checkout
 ├── .github/workflows/
@@ -54,7 +56,7 @@ test-plugin-house/
 │   ├── build-wasm.sh    запускает сборку (оставляет окно терминала открытым)
 │   ├── build-wasm.py    интерактивная сборка .wasm из src/lib.rs
 │   └── test-plugin.sh   прогоняет собранный плагин через bimcraft-cli
-├── src/lib.rs           функции build, check, open_file и update
+├── src/lib.rs           функции build, check и open_file; update — за фичей self-update
 └── keys/                ключ подписи фида (в .gitignore, в репозиторий не попадает)
 ```
 
@@ -65,7 +67,7 @@ test-plugin-house/
 | `plugin:house-builder:build` | строит дом; параметры `at`, `width`, `depth`, `height`, `room` (все необязательные)               |
 | `plugin:house-builder:check` | читает модель и возвращает **текстовый отчёт** о её составе (поля `report` и `counts`); в окне отчёт открывается в диалоге; undo-шага не делает |
 | `plugin:house-builder:open_file` | **Open File** — открывает файл проекта (`.bimcraft` или `.ifc`) по абсолютному пути из любой папки. Параметр `path` обязателен. Требует разрешения `files` (его проверяет песочница). Возвращает `report`, `path`, `name` (имя проекта) и `counts`. Открытие заменяет проект, поэтому это не undo-шаг |
-| `plugin:house-builder:update` | **Update Plugin** — спрашивает канал релизов, какая версия новее, и отвечает полями `current`, `available`, `released`, `notes`, `host`, `key`; с `install: true` устанавливает найденную версию. Требует разрешения `update` |
+| `plugin:house-builder:update` | **Update Plugin** — необязательная функция: собирается только с `--features self-update`, для BIMCraft с `update_check`/`update_apply`. Спрашивает канал релизов, какая версия новее, и отвечает полями `current`, `available`, `released`, `notes`, `host`, `key`; с `install: true` устанавливает найденную версию. Требует разрешения `update` |
 
 ### Тест песочницы: кнопка Open File
 
@@ -191,8 +193,8 @@ bimcraft-cli commands | grep house-builder
 ## Как проверить в интерфейсе
 
 1. Запустите десктоп (с `BIMCRAFT_PLUGINS=...` или после копирования в папку плагинов).
-2. Откройте **Manage > Plugins**. В списке будет `House Builder (test) 0.2.0`, статус **Loaded**,
-   автор `BIMCraft test`, четыре функции (в описании — запросы `files` и `update`); ниже — журнал загрузки.
+2. Откройте **Manage > Plugins**. В списке будет `House Builder (test) 0.3.0`, статус **Loaded**,
+   автор `BIMCraft test`, три функции (в описании — запрос `files`); ниже — журнал загрузки.
 3. На ленте появится вкладка **Test Plugins** с панелью **House** и кнопками **Build House** и **Check House**.
 4. Нажмите **Build House** — на плане появятся стены, пол, дверь, окно, помещение и крыша;
    в строке состояния ошибок быть не должно. В журнале плагина: `building a 8000 x 6000 mm house at 0, 0`
@@ -382,11 +384,14 @@ cargo run -q -p bimcraft-cli -- run --cmd 'plugin:house-builder:update {"install
 
 Смена ключа — это новый `public_key` в манифесте; у каждого пользователя один раз спросят подтверждение.
 
-> **Нужна сборка BIMCraft с самообновлением плагинов.** Манифест просит разрешение `update`, оно
-> появилось вместе с каналом обновления. Старые сборки отвергают неизвестное разрешение, поэтому там
-> плагин не загрузится вообще — так и задумано: плагин, который может заменить свой код, не должен
-> грузиться там, где это никто не проверяет. Сборка без `update`, но с `files`, запустит плагин, если
-> убрать из `plugin.json` разрешение, блок `update` и функцию `update`, и пересобрать.
+> **Самообновление необязательно, и модуль в этой папке собран без него.** Ему нужен BIMCraft, хост
+> ABI 1 которого подключает `bimcraft.update_check` и `bimcraft.update_apply`; хост только с `execute`,
+> `log` и `info` отвергает любой модуль с такими импортами, даже если функция не вызывается. Поэтому
+> сборка по умолчанию импортирует лишь три исходные функции хоста, а `plugin.json` объявляет только
+> разрешение `files`: один и тот же модуль и манифест загружаются в обеих сборках. Чтобы вернуть кнопку
+> **Update Plugin** на хосте с самообновлением, верните в манифест блок `update`, разрешение `update` и
+> четвёртую функцию и пересоберите с `cargo build --target wasm32-unknown-unknown --release
+> --features self-update`.
 
 ## Если что-то не так
 

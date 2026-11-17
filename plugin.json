@@ -7,11 +7,9 @@
   "module": "house_builder.wasm",
   "author": "BIMCraft test",
   "license": "MIT OR Apache-2.0",
-  "permissions": ["files", "update"],
-  "update": {
-    "feed": "https://github.com/dronov-dmitry/bimcraft-plugin-create-home/releases/latest/download/latest.json",
-    "public_key": "ed25519:wZadJhhSSUG+bQwWLo2caMWPxSU5OCeYajloeoqTQUU="
-  },
+  "permissions": [
+    "files"
+  ],
   "functions": [
     {
       "id": "build",
@@ -22,15 +20,35 @@
         "properties": {
           "at": {
             "type": "array",
-            "items": {"type": "number"},
+            "items": {
+              "type": "number"
+            },
             "minItems": 2,
             "maxItems": 2,
             "description": "The south-west corner in plan mm; [0, 0] without it"
           },
-          "width": {"type": "number", "minimum": 2000, "maximum": 50000, "description": "East-west, mm; 8000 without it"},
-          "depth": {"type": "number", "minimum": 2000, "maximum": 50000, "description": "North-south, mm; 6000 without it"},
-          "height": {"type": "number", "minimum": 1000, "maximum": 20000, "description": "Wall height in mm; unconnected if given, else up to the level above"},
-          "room": {"type": "string", "description": "The room's name; Living Room without it"}
+          "width": {
+            "type": "number",
+            "minimum": 2000,
+            "maximum": 50000,
+            "description": "East-west, mm; 8000 without it"
+          },
+          "depth": {
+            "type": "number",
+            "minimum": 2000,
+            "maximum": 50000,
+            "description": "North-south, mm; 6000 without it"
+          },
+          "height": {
+            "type": "number",
+            "minimum": 1000,
+            "maximum": 20000,
+            "description": "Wall height in mm; unconnected if given, else up to the level above"
+          },
+          "room": {
+            "type": "string",
+            "description": "The room's name; Living Room without it"
+          }
         }
       },
       "tab": "Test Plugins",
@@ -41,7 +59,9 @@
       "id": "check",
       "label": "Check House",
       "description": "Reads the model and answers with a human-readable `report`: levels, elements by category, rooms, walls, openings, floors, roofs, notes, warnings and history. The window shows it. No undo step.",
-      "params": {"type": "object"},
+      "params": {
+        "type": "object"
+      },
       "tab": "Test Plugins",
       "panel": "House",
       "order": 2
@@ -53,30 +73,18 @@
       "params": {
         "type": "object",
         "properties": {
-          "path": {"type": "string", "description": "The file to open, e.g. /home/user/models/House.bimcraft"}
+          "path": {
+            "type": "string",
+            "description": "The file to open, e.g. /home/user/models/House.bimcraft"
+          }
         },
-        "required": ["path"]
+        "required": [
+          "path"
+        ]
       },
       "tab": "Test Plugins",
       "panel": "House",
       "order": 3
-    },
-    {
-      "id": "update",
-      "label": "Update Plugin",
-      "description": "Asks the release channel for the newest version and answers with `current`, `available`, `released`, `notes`, `host` and `key`; with `install` true it installs it. Needs the `update` permission.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "install": {
-            "type": "boolean",
-            "description": "Install the version the channel announces; false or omitted only checks"
-          }
-        }
-      },
-      "tab": "Test Plugins",
-      "panel": "House",
-      "order": 4
     }
   ]
 }

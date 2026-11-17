@@ -12,6 +12,12 @@ description = "A test BIMCraft plugin that builds a small house: walls, floor, r
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+# The plugin's own release channel. It needs a BIMCraft whose ABI 1 host links `bimcraft.update_check` and
+# `bimcraft.update_apply`; builds without this feature use the host's three original imports only.
+default = []
+self-update = []
+
 [dependencies]
 # A vendored copy of BIMCraft's SDK, so the repository builds without a checkout.
 bimcraft-plugin-sdk = { path = "vendor/plugin-sdk" }
