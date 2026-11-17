@@ -299,14 +299,17 @@ keep `version` in `vendor/plugin-sdk/Cargo.toml` in step, and rebuild.
 
 ## Releases and self-update
 
-A release is a tag. The `release` workflow builds the module, packs the archive, signs the feed and
-publishes three assets:
+A release is a tag. The `release` workflow builds the module, packs the archive and publishes:
 
 | Asset                        | What it is                                                                 |
 | ---------------------------- | -------------------------------------------------------------------------- |
-| `house-builder-<version>.zip`| the update archive: exactly `plugin.json` and the module, nothing else     |
+| `house-builder-<version>.zip`| the release archive: exactly `plugin.json` and the module, nothing else    |
 | `house-builder.zip`          | the same archive under a stable name, so `releases/latest/download/house-builder.zip` always means the newest one |
-| `latest.json`                | the signed feed behind `releases/latest/download/latest.json`              |
+| `latest.json`                | the signed feed behind `releases/latest/download/latest.json`, only when `plugin.json` declares `update.public_key` |
+
+The default build has no self-update and declares no `update` block, because older ABI 1 hosts refuse
+it. Such a release has no feed: `scripts/install.sh` installs the stable archive, and updating means
+running the installer again.
 
 To publish a version:
 
