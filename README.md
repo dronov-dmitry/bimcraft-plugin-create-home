@@ -6,6 +6,8 @@ A plugin for exercising BIMCraft's plugin system. One button builds a small hous
 four walls, a floor, a door, a window, a room, a roof and a text note. All of it is **one undo step**;
 if any command fails, the plugin returns an error and rolls back the whole call.
 
+Video: https://youtu.be/OuOVO3mU8HE
+
 The plugin is published on GitHub as a release, so it goes in with **one terminal command** and then
 **updates itself** from those releases once you allow that in BIMCraft: see
 [Installation](#installation) and [Releases and self-update](#releases-and-self-update).
