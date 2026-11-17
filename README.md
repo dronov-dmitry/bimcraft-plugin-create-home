@@ -60,25 +60,28 @@ Functions:
 | Command                      | What it does                                                                                                     |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `plugin:house-builder:build` | builds a house; parameters `at`, `width`, `depth`, `height`, `room` (all optional)                               |
-| `plugin:house-builder:check` | reads the model and returns a **text report** about its contents (`report` and `counts` fields); in the window the report opens in a dialog; it does not create an undo step |
+| `plugin:house-builder:check` | reads the model and returns a **report** about its contents (`report` and `counts` fields) — Markdown with tables on a host that reports `markdown_reports`, plain text otherwise; in the window the report opens in a dialog; it does not create an undo step |
 | `plugin:house-builder:open_file` | **Open File** — opens a project file (`.bimcraft` or `.ifc`) by absolute path, replacing the project; needs the `files` permission |
 | `plugin:house-builder:update` | **Update Plugin** — optional: built only with `--features self-update`, for a BIMCraft that links `update_check`/`update_apply`. Asks the release channel what the newest version is and answers with `current`, `available`, `released`, `notes`, `host` and `key`; with `install: true` it installs that version; needs the `update` permission |
 
 ### The Check House report
 
-The `check` function returns JSON with a string field `report` — human-ready text:
+On a host that reports `markdown_reports` in `bimcraft.info` — the desktop with Markdown reports — `check`
+returns a Markdown report, and the window draws its headings, lists and tables:
 
 ```json
-{"report": "MODEL REPORT - …", "counts": {"wall": 4, "floor": 1, "roof": 1, "door": 1, "window": 1, "room": 1}}
+{"report": {"text": "# Model report — Project\n\n## Levels (2)\n\n| Name | Elevation |\n|:---|---:|\n| Level 1 | 0 mm |\n| Level 2 | 3000 mm |\n", "format": "markdown"}, "counts": {"wall": 4, "floor": 1, "roof": 1, "door": 1, "window": 1, "room": 1}}
 ```
 
-If a plugin command response has a string field `report`, the desktop opens it in a dialog
-with the button label as the title (the plugin's text is not translated) and **Copy** / **Close** buttons;
-in the CLI and MCP it is just JSON in the command response. The `check` report contains: the project name and its
-standard, levels with elevations, elements by category, what stands on each level, rooms with areas and
-the enclosed flag, walls (total length, height, types), doors and windows (marks, types, dimensions), floors
-with area, roofs, text notes, library size (how many types, materials, families and
-parameters), warnings and the number of history steps.
+An older host knows only a string `report`, so there the same content comes as a plain monospace string.
+
+The desktop opens the report in a dialog with the button label as the title (the plugin's text is not
+translated) and **Copy** / **Close** buttons; in the CLI and MCP it is just JSON in the command response.
+The `check` report contains: the project name and its standard, levels with elevations, elements by category,
+what stands on each level, rooms with areas and the enclosed flag, walls (total length, height, types),
+doors and windows (marks, types, dimensions), floors with area, roofs, text notes, library size (how many
+types, materials, families and parameters), warnings and the number of history steps. The levels,
+elements, rooms and openings are Markdown tables.
 
 ## Installation
 
