@@ -6,3 +6,6 @@
 /keys/
 *.pem
 /dist/
+
+# Python bytecode the helper scripts leave behind.
+__pycache__/
