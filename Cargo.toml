@@ -1,6 +1,6 @@
 [package]
 name = "house-builder"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
@@ -13,7 +13,7 @@ description = "A test BIMCraft plugin that builds a small house: walls, floor, r
 crate-type = ["cdylib"]
 
 [features]
-# The plugin's own release channel. It needs a BIMCraft whose ABI 1 host links `bimcraft.update_check` and
+# The plugin's own release channel. It needs a BIMCraft host that links `bimcraft.update_check` and
 # `bimcraft.update_apply`; builds without this feature use the host's three original imports only.
 default = []
 self-update = []

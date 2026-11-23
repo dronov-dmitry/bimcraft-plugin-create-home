@@ -9,9 +9,10 @@ if any command fails, the plugin returns an error and rolls back the whole call.
 Video: https://youtu.be/OuOVO3mU8HE
 
 The plugin is published on GitHub as a release, so it goes in with **one terminal command**.
-By default it is built for every ABI 1 host: it imports only `execute`, `log` and `info`, so the same
-module runs in BIMCraft builds with and without plugin self-update. Self-update is an optional Cargo
-feature (`--features self-update`) for hosts that link `update_check` and `update_apply`: see
+It is built for a host that speaks **ABI 2** (plugin panels): the module imports only `execute`, `log` and
+`info`, but its manifest declares `"abi": 2` and two dockable panels, and an older ABI 1 host refuses the
+whole manifest. For an ABI 1 host, set `"abi": 1` and remove the `panels` block. Self-update is an optional
+Cargo feature (`--features self-update`) for hosts that link `update_check` and `update_apply`: see
 [Installation](#installation) and [Releases and self-update](#releases-and-self-update).
 
 > **Important:** BIMCraft **does not execute `src/lib.rs`**. A plugin is `plugin.json` plus a compiled
@@ -35,7 +36,7 @@ feature (`--features self-update`) for hosts that link `update_check` and `updat
 
 ```text
 test-plugin-house/
-├── plugin.json          manifest: id house-builder, ABI 1, three functions, the `files` permission
+├── plugin.json          manifest: id house-builder, ABI 2, four functions, two panels, the `files` permission
 ├── house_builder.wasm   compiled module (wasm32-unknown-unknown, release; no self-update imports)
 ├── Cargo.toml           plugin sources (separate cdylib, SDK taken from vendor/)
 ├── vendor/plugin-sdk/   a copy of BIMCraft's crates/plugin-sdk, so the build needs no checkout
@@ -51,7 +52,7 @@ test-plugin-house/
 │   ├── build-wasm.sh    runs the build (keeps the terminal window open)
 │   ├── build-wasm.py    interactive .wasm build from src/lib.rs
 │   └── test-plugin.sh   runs the built plugin through bimcraft-cli
-├── src/lib.rs           the build, check and open_file functions; `update` behind `self-update`
+├── src/lib.rs           the build, check, summary and open_file functions; `update` behind `self-update`
 └── keys/                the feed signing key (gitignored, never committed)
 ```
 
@@ -61,6 +62,7 @@ Functions:
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `plugin:house-builder:build` | builds a house; parameters `at`, `width`, `depth`, `height`, `room` (all optional)                               |
 | `plugin:house-builder:check` | reads the model and returns a **report** about its contents (`report` and `counts` fields) — Markdown with tables on a host that reports `markdown_reports`, plain text otherwise; in the window the report opens in a dialog; it does not create an undo step |
+| `plugin:house-builder:summary` | reads the model and answers with a `panel`: a table of the categories on the chosen level or of the rooms with their areas, a note and a badge; fills both plugin panels; no undo step |
 | `plugin:house-builder:open_file` | **Open File** — opens a project file (`.bimcraft` or `.ifc`) by absolute path, replacing the project; needs the `files` permission |
 | `plugin:house-builder:update` | **Update Plugin** — optional: built only with `--features self-update`, for a BIMCraft that links `update_check`/`update_apply`. Asks the release channel what the newest version is and answers with `current`, `available`, `released`, `notes`, `host` and `key`; with `install: true` it installs that version; needs the `update` permission |
 
@@ -82,6 +84,35 @@ what stands on each level, rooms with areas and the enclosed flag, walls (total 
 doors and windows (marks, types, dimensions), floors with area, roofs, text notes, library size (how many
 types, materials, families and parameters), warnings and the number of history steps. The levels,
 elements, rooms and openings are Markdown tables.
+
+## Panels (ABI 2)
+
+The manifest declares two dockable palettes; the host draws them and the plugin only answers with data.
+No new imports: a panel's button calls a plugin function through the same transaction as a ribbon button,
+so one press is one undo step.
+
+- **House Builder** (`plugin:house-builder:house`, docks right): width, depth, height and room name,
+  a **No roof** box, a level, a table mode (**Categories on the level** or **Rooms with areas**), a wall
+  type from the library, a read-only selection count, and the **Build House**, **Summarise** and
+  **Full Report** buttons. Its table and note are filled by `summary`.
+- **House Report** (`plugin:house-builder:report`, docks at the bottom): the same summary as read-only
+  text, and **Full Report**, which opens the Markdown report in a dialog.
+
+The first time a panel is shown it calls `on_open` (`summary`); Refresh and every panel button call
+`refresh` afterwards. Changing a field calls nothing: the values collect until a button is pressed, and
+then they are the call's `params` — `{"width": 5000, "depth": 4000, "no_roof": true, "level": "Level 1",
+"mode": "categories", "wall_type": "Basic Wall"}`. Lengths are typed in the project's units and sent in mm.
+
+To open a panel, use the app bar's **Palettes** menu or **Settings > User Interface** and tick it. Panels
+drag by their title, float, close, and their place and visibility are kept in `settings.json` and in presets.
+The values of a panel are never written to the project or the settings file.
+
+In the CLI the same function is still an ordinary command, with no panel attached:
+
+```sh
+bimcraft-cli run --cmd 'plugin:house-builder:summary {"level":"Level 1","mode":"rooms"}'
+# {"panel":{"error":null,"table":{"rows":[["101","Living Room","48.0 m2"]]},"text":"…"}}
+```
 
 ## Installation
 
@@ -171,14 +202,15 @@ Checking the installation in the CLI:
 bimcraft-cli commands | grep house-builder
 ```
 
-The list must contain `plugin:house-builder:build` and `plugin:house-builder:check` with the field `"plugin": "house-builder"`.
+The list must contain `plugin:house-builder:build`, `plugin:house-builder:check`,
+`plugin:house-builder:summary` and `plugin:house-builder:open_file` with the field `"plugin": "house-builder"`.
 
 ## How to check it in the UI
 
 1. Launch the desktop (with `BIMCRAFT_PLUGINS=...` or after copying into the plugins folder).
-2. Open **Manage > Plugins**. The list will show `House Builder (test) 0.3.0`, status **Loaded**,
-   author `BIMCraft test`, three functions; the description mentions the `files` request;
-   below that is the load log.
+2. Open **Manage > Plugins**. The list will show `House Builder (test) 0.5.0`, status **Loaded**,
+   author `BIMCraft test`, four functions and the panels `House Builder (house)` and `House Report (report)`;
+   the description mentions the `files` request; below that is the load log.
 3. A **Test Plugins** tab appears in the ribbon with a **House** panel and the **Build House** and **Check House** buttons.
 4. Press **Build House** — walls, a floor, a door, a window, a room and a roof appear on the plan;
    there must be no errors in the status bar. In the plugin log: `building a 8000 x 6000 mm house at 0, 0`
@@ -190,7 +222,9 @@ The list must contain `plugin:house-builder:build` and `plugin:house-builder:che
    doors and windows with dimensions, floors, roofs, notes, the library, warnings and history steps
    (for a freshly built house — `Walls 4 · Floors 1 · Doors 1 · Windows 1 · Rooms 1`, etc.).
    There will be no undo step; in **Manage > Plugins** the log will show `the model report has N lines`.
-7. In **Manage > Plugins** press **Disable** — the **Test Plugins** tab and the commands disappear immediately;
+7. Open the app bar's **Palettes** menu (or **Settings > User Interface**) and tick **House Builder** and
+   **House Report**: the panels dock on the right and at the bottom. See [Panels (ABI 2)](#panels-abi-2).
+8. In **Manage > Plugins** press **Disable** — the **Test Plugins** tab, both panels and the commands disappear immediately;
    **Enable** brings them back. **Refresh** re-reads the folder without a restart.
 
 ## The same checks in the CLI

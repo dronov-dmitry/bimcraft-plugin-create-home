@@ -2,7 +2,9 @@
 //!
 //! One call makes the four walls, the floor, a door, a window, a room, a roof and a note. Every step is a command, so the
 //! whole call is one undo step and a failure in the middle takes all of it back. It reads the model with the same
-//! `elements` command in `check`, which answers with a `report` the window opens on screen.
+//! `elements` command in `check`, which answers with a `report` the window opens on screen, and in `summary`, which
+//! answers with a `panel` the window draws: a table, a note and a badge. The panels themselves are declared in
+//! `plugin.json` (ABI 2); the plugin writes no interface code.
 
 use bimcraft_plugin_sdk::{Value, execute, host_info, info_log};
 #[cfg(feature = "self-update")]
@@ -39,7 +41,15 @@ fn build(params: &Value) -> Result<Value, String> {
     let at = point(params, "at", [0.0, 0.0])?;
     let width = number(params, "width", 8000.0, 2000.0, 50_000.0)?;
     let depth = number(params, "depth", 6000.0, 2000.0, 50_000.0)?;
-    let room_name = params.get("room").and_then(Value::as_str).unwrap_or("Living Room").to_string();
+    // An empty field of a panel sends "", which is not a name: fall back to the default.
+    let room_name = params
+        .get("room")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("Living Room")
+        .to_string();
+    let no_roof = params.get("no_roof").and_then(Value::as_bool).unwrap_or(false);
     let (x, y) = (at[0], at[1]);
     let (x2, y2) = (x + width, y + depth);
     let outline = json!([[x, y], [x2, y], [x2, y2], [x, y2]]);
@@ -58,7 +68,7 @@ fn build(params: &Value) -> Result<Value, String> {
     let door = execute("door", &json!({"at": [x + width / 2.0, y], "mark": "D1"}))?;
     let window = execute("window", &json!({"at": [x2, y + depth / 2.0], "mark": "W1"}))?;
     let room = execute("room", &json!({"point": [x + width / 2.0, y + depth / 2.0], "name": room_name, "number": "101"}))?;
-    let roof = execute("roof", &json!({"overhang": 500.0, "slope": 30.0}))?;
+    let roof = if no_roof { Value::Null } else { execute("roof", &json!({"overhang": 500.0, "slope": 30.0}))? };
     let note = execute(
         "text",
         &json!({
@@ -771,6 +781,89 @@ fn check_plain(_: &Value) -> Result<Value, String> {
     Ok(json!({"report": report, "counts": counts}))
 }
 
+/// `summary`: what the plugin's panels show. It reads the model, counts the categories on the chosen level or lists
+/// the rooms with their areas, and answers with `panel`: a table and a note. It only reads, so it makes no
+/// undo step; the panels' values arrive as ordinary `params`.
+fn summary(params: &Value) -> Result<Value, String> {
+    let model = execute("inspect", &json!({"brief": true}))?;
+    let counts = model.get("counts").cloned().unwrap_or(Value::Null);
+    let mut categories: Vec<(String, u64)> = counts
+        .as_object()
+        .map(|c| c.iter().map(|(k, v)| (k.clone(), v.as_u64().unwrap_or(0))).filter(|(_, n)| *n > 0).collect())
+        .unwrap_or_default();
+    categories.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let total: u64 = categories.iter().map(|(_, n)| *n).sum();
+
+    let level = params.get("level").and_then(Value::as_str).map(str::trim).unwrap_or("");
+    let mode = params.get("mode").and_then(Value::as_str).unwrap_or("categories");
+    let wall_type = params.get("wall_type").and_then(Value::as_str).map(str::trim).unwrap_or("");
+
+    // A big model gets a shorter list: the table is a page of it, the note has the whole count.
+    let limit: u64 = if total <= 40 { 60 } else { 8 };
+    let mut query = json!({"category": "room", "limit": limit});
+    if !level.is_empty() {
+        query["level"] = json!(level);
+    }
+    let rooms = execute("elements", &query).ok();
+    let room_count = rooms.as_ref().and_then(|r| r.get("count")).and_then(Value::as_u64).unwrap_or(0);
+    let room_rows: Vec<Value> =
+        rooms.as_ref().and_then(|r| r.get("elements")).and_then(Value::as_array).cloned().unwrap_or_default();
+
+    let mut rows: Vec<Vec<Value>> = Vec::new();
+    let mut on_level = total;
+    if mode == "rooms" {
+        for row in &room_rows {
+            let area = number_in(row, "area_m2").unwrap_or(0.0);
+            rows.push(vec![json!(text_in(row, "number")), json!(text_in(row, "name")), json!(format!("{area:.1} m2"))]);
+        }
+    } else {
+        let scope = if level.is_empty() { "All levels" } else { level };
+        on_level = 0;
+        for (category, whole) in categories.iter().take(20) {
+            let n = if level.is_empty() { *whole } else { level_count(category, level).unwrap_or(0) };
+            if n > 0 {
+                on_level += n;
+                rows.push(vec![json!(scope), json!(plural(&category_name(category))), json!(n)]);
+            }
+        }
+    }
+
+    let project = text_in(&model, "name");
+    let title = if project.is_empty() { "the untitled project" } else { project };
+    let categories_text = format!("{} categor{}", categories.len(), if categories.len() == 1 { "y" } else { "ies" });
+    let mut note = format!("{title}: {total} elements in {categories_text}");
+    if !level.is_empty() && mode != "rooms" {
+        note.push_str(&format!(" · {level}: {on_level}"));
+    }
+    if mode == "rooms" {
+        let rooms_word = format!("{room_count} room{}", if room_count == 1 { "" } else { "s" });
+        if level.is_empty() {
+            note.push_str(&format!(" · {rooms_word}"));
+        } else {
+            note.push_str(&format!(" · {level}: {rooms_word}"));
+        }
+        if room_count as usize == room_rows.len() && !room_rows.is_empty() {
+            let area: f64 = room_rows.iter().filter_map(|row| number_in(row, "area_m2")).sum();
+            note.push_str(&format!(", {}", square_metres(area)));
+        }
+    }
+    if !wall_type.is_empty() {
+        note.push_str(&format!(" · wall type {wall_type}"));
+    }
+    let warnings = model.get("warnings").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+    let steps = model.get("history").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+    note.push_str(&format!(" · {warnings} warnings · {steps} undo steps"));
+
+    info_log(&format!("the panel summary has {} rows", rows.len()));
+    Ok(json!({
+        "panel": {
+            "text": note,
+            "table": {"rows": rows},
+            "error": null
+        }
+    }))
+}
+
 /// `open_file`: reads a project file from anywhere on the disk into the session, through `open`.
 ///
 /// This one reaches the disk, so it only works when the plugin is given the `files` permission; the sandbox
@@ -802,7 +895,7 @@ fn open_file(params: &Value) -> Result<Value, String> {
 /// this answers with what happened rather than with a reload.
 ///
 /// This needs a host that links `bimcraft.update_check` and `bimcraft.update_apply`, which is why it is off by
-/// default: a module that imports them is refused by the ABI 1 host that has only `execute`, `log` and `info`.
+/// default: a module that imports them is refused by a host that has only `execute`, `log` and `info`.
 #[cfg(feature = "self-update")]
 fn update(params: &Value) -> Result<Value, String> {
     let install = params.get("install").and_then(Value::as_bool).unwrap_or(false);
@@ -825,6 +918,7 @@ fn update(params: &Value) -> Result<Value, String> {
 bimcraft_plugin_sdk::export! {
     "build" => build,
     "check" => check,
+    "summary" => summary,
     "open_file" => open_file,
 }
 
@@ -832,6 +926,7 @@ bimcraft_plugin_sdk::export! {
 bimcraft_plugin_sdk::export! {
     "build" => build,
     "check" => check,
+    "summary" => summary,
     "open_file" => open_file,
     "update" => update,
 }

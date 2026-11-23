@@ -9,8 +9,9 @@
 Video: https://youtu.be/OuOVO3mU8HE
 
 Плагин публикуется релизом на GitHub, поэтому ставится **одной командой в терминале**.
-По умолчанию он собран для любого хоста ABI 1: модуль импортирует только `execute`, `log` и `info`,
-поэтому один и тот же `.wasm` запускается и в сборках BIMCraft с самообновлением плагинов, и без него.
+Он собран для хоста, который знает **ABI 2** (панели плагинов): модуль импортирует только `execute`, `log`
+и `info`, но в манифесте стоит `"abi": 2` и объявлены две докующиеся панели, а старый хост ABI 1 откажет
+всему манифесту. Для хоста ABI 1 поставьте `"abi": 1` и уберите блок `panels`.
 Самообновление — необязательная Cargo-фича (`--features self-update`) для хостов, которые
 подключают `update_check` и `update_apply`: см. «Установка» и «Релизы и самообновление».
 
@@ -40,7 +41,7 @@ Video: https://youtu.be/OuOVO3mU8HE
 
 ```text
 test-plugin-house/
-├── plugin.json          манифест: id house-builder, ABI 1, три функции, разрешение files
+├── plugin.json          манифест: id house-builder, ABI 2, четыре функции, две панели, разрешение files
 ├── house_builder.wasm   собранный модуль (wasm32-unknown-unknown, release; без импортов self-update)
 ├── Cargo.toml           исходник плагина (отдельный cdylib, SDK берётся из vendor/)
 ├── vendor/plugin-sdk/   копия crates/plugin-sdk из BIMCraft, чтобы сборке не нужен был checkout
@@ -56,7 +57,7 @@ test-plugin-house/
 │   ├── build-wasm.sh    запускает сборку (оставляет окно терминала открытым)
 │   ├── build-wasm.py    интерактивная сборка .wasm из src/lib.rs
 │   └── test-plugin.sh   прогоняет собранный плагин через bimcraft-cli
-├── src/lib.rs           функции build, check и open_file; update — за фичей self-update
+├── src/lib.rs           функции build, check, summary и open_file; update — за фичей self-update
 └── keys/                ключ подписи фида (в .gitignore, в репозиторий не попадает)
 ```
 
@@ -64,8 +65,9 @@ test-plugin-house/
 
 | Команда                      | Что делает                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| `plugin:house-builder:build` | строит дом; параметры `at`, `width`, `depth`, `height`, `room` (все необязательные)               |
+| `plugin:house-builder:build` | строит дом; параметры `at`, `width`, `depth`, `height`, `room`, `no_roof` (все необязательные)               |
 | `plugin:house-builder:check` | читает модель и возвращает **текстовый отчёт** о её составе (поля `report` и `counts`); в окне отчёт открывается в диалоге; undo-шага не делает |
+| `plugin:house-builder:summary` | читает модель и отвечает `panel`: таблица категорий на выбранном уровне или помещений с площадями, заметка и badge; заполняет обе панели плагина; undo-шага не делает |
 | `plugin:house-builder:open_file` | **Open File** — открывает файл проекта (`.bimcraft` или `.ifc`) по абсолютному пути из любой папки. Параметр `path` обязателен. Требует разрешения `files` (его проверяет песочница). Возвращает `report`, `path`, `name` (имя проекта) и `counts`. Открытие заменяет проект, поэтому это не undo-шаг |
 | `plugin:house-builder:update` | **Update Plugin** — необязательная функция: собирается только с `--features self-update`, для BIMCraft с `update_check`/`update_apply`. Спрашивает канал релизов, какая версия новее, и отвечает полями `current`, `available`, `released`, `notes`, `host`, `key`; с `install: true` устанавливает найденную версию. Требует разрешения `update` |
 
@@ -103,6 +105,35 @@ test-plugin-house/
 типы, размеры), полы с площадью, крыши, текстовые заметки, размер библиотеки (сколько типов,
 материалов, семейств и параметров), предупреждения и число шагов истории. Уровни, элементы,
 помещения и проёмы — таблицы Markdown.
+
+## Панели (ABI 2)
+
+Манифест объявляет две докующиеся панели; рисует их хост, а плагин отвечает только данными. Новых
+импортов нет: кнопка панели вызывает функцию плагина через ту же транзакцию, что и кнопка ленты, поэтому
+одно нажатие — один шаг undo.
+
+- **House Builder** (`plugin:house-builder:house`, докируется справа): ширина, глубина, высота и имя
+  помещения, флажок **No roof**, уровень, режим таблицы (**Categories on the level** или **Rooms with
+  areas**), тип стены из библиотеки, счётчик выделения только для чтения и кнопки **Build House**,
+  **Summarise**, **Full Report**. Таблицу и заметку заполняет `summary`.
+- **House Report** (`plugin:house-builder:report`, докируется снизу): та же сводка текстом только для
+  чтения и **Full Report**, который открывает Markdown-отчёт в диалоге.
+
+При первом показе панель вызывает `on_open` (`summary`); Refresh и каждая кнопка панели после себя
+вызывают `refresh`. Изменение поля не вызывает ничего: значения копятся до нажатия кнопки и становятся
+`params` вызова — например `{"width": 5000, "depth": 4000, "no_roof": true, "level": "Level 1",
+"mode": "categories", "wall_type": "Basic Wall"}`. Длины вводятся в единицах проекта, а уходят в мм.
+
+Чтобы открыть панель, включите её в меню **Palettes** на панели приложения или в
+**Settings > User Interface**. Панели тянутся за заголовок, плавают, закрываются; их место и открытость
+хранятся в `settings.json` и в пресетах. Значения панели не пишутся ни в проект, ни в файл настроек.
+
+В CLI та же функция остаётся обычной командой, без панели:
+
+```sh
+bimcraft-cli run --cmd 'plugin:house-builder:summary {"level":"Level 1","mode":"rooms"}'
+# {"panel":{"error":null,"table":{"rows":[["101","Living Room","48.0 m2"]]},"text":"…"}}
+```
 
 ## Установка
 
@@ -192,13 +223,15 @@ Copy-Item -Recurse "C:\путь\test-plugin-house" "$env:APPDATA\BIMCraft\plugin
 bimcraft-cli commands | grep house-builder
 ```
 
-В списке должны быть `plugin:house-builder:build` и `plugin:house-builder:check` с полем `"plugin": "house-builder"`.
+В списке должны быть `plugin:house-builder:build`, `plugin:house-builder:check`,
+`plugin:house-builder:summary` и `plugin:house-builder:open_file` с полем `"plugin": "house-builder"`.
 
 ## Как проверить в интерфейсе
 
 1. Запустите десктоп (с `BIMCRAFT_PLUGINS=...` или после копирования в папку плагинов).
-2. Откройте **Manage > Plugins**. В списке будет `House Builder (test) 0.3.0`, статус **Loaded**,
-   автор `BIMCraft test`, три функции (в описании — запрос `files`); ниже — журнал загрузки.
+2. Откройте **Manage > Plugins**. В списке будет `House Builder (test) 0.5.0`, статус **Loaded**,
+   автор `BIMCraft test`, четыре функции и панели `House Builder (house)` и `House Report (report)`
+   (в описании — запрос `files`); ниже — журнал загрузки.
 3. На ленте появится вкладка **Test Plugins** с панелью **House** и кнопками **Build House** и **Check House**.
 4. Нажмите **Build House** — на плане появятся стены, пол, дверь, окно, помещение и крыша;
    в строке состояния ошибок быть не должно. В журнале плагина: `building a 8000 x 6000 mm house at 0, 0`
@@ -210,7 +243,9 @@ bimcraft-cli commands | grep house-builder
    двери и окна с размерами, полы, крыши, заметки, библиотека, предупреждения и шаги истории
    (для только что построенного дома — `Walls 4 · Floors 1 · Doors 1 · Windows 1 · Rooms 1` и т. д.).
    Undo-шага не будет; в **Manage > Plugins** в журнале появится `the model report has N lines`.
-7. В **Manage > Plugins** нажмите **Disable** — вкладка **Test Plugins** и команды исчезнут сразу;
+7. Откройте меню **Palettes** на панели приложения (или **Settings > User Interface**) и включите
+   **House Builder** и **House Report** — панели встанут справа и снизу. Подробнее — «Панели (ABI 2)».
+8. В **Manage > Plugins** нажмите **Disable** — вкладка **Test Plugins**, обе панели и команды исчезнут сразу;
    **Enable** вернёт их. **Refresh** перечитывает папку без перезапуска.
 
 ## Те же проверки в CLI

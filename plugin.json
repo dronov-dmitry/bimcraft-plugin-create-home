@@ -1,20 +1,203 @@
 {
   "id": "house-builder",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "name": "House Builder (test)",
-  "description": "A test plugin: builds a small house with walls, a floor, a door, a window, a room, a roof and a note, and reports on the composition of the model.",
-  "abi": 1,
+  "description": "A test plugin: builds a small house with walls, a floor, a door, a window, a room, a roof and a note, reports on the composition of the model, and offers dockable panels (ABI 2).",
+  "abi": 2,
   "module": "house_builder.wasm",
   "author": "BIMCraft test",
   "license": "MIT OR Apache-2.0",
   "permissions": [
     "files"
   ],
+  "panels": [
+    {
+      "id": "house",
+      "title": "House Builder",
+      "order": 1,
+      "dock": "right",
+      "on_open": "summary",
+      "refresh": "summary",
+      "widgets": [
+        {
+          "type": "label",
+          "text": "Builds a house and reads the model without leaving the panel."
+        },
+        {
+          "type": "group",
+          "title": "House",
+          "widgets": [
+            {
+              "type": "row",
+              "widgets": [
+                {
+                  "type": "number",
+                  "id": "width",
+                  "label": "Width",
+                  "unit": "length",
+                  "min": 2000,
+                  "max": 50000
+                },
+                {
+                  "type": "number",
+                  "id": "depth",
+                  "label": "Depth",
+                  "unit": "length",
+                  "min": 2000,
+                  "max": 50000
+                }
+              ]
+            },
+            {
+              "type": "number",
+              "id": "height",
+              "label": "Wall height (empty: up to the level above)",
+              "unit": "length",
+              "min": 1000,
+              "max": 20000
+            },
+            {
+              "type": "text",
+              "id": "room",
+              "label": "Room name (empty: Living Room)"
+            },
+            {
+              "type": "checkbox",
+              "id": "no_roof",
+              "label": "No roof"
+            }
+          ]
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "type": "group",
+          "title": "Summary",
+          "widgets": [
+            {
+              "type": "level",
+              "id": "level",
+              "label": "Level"
+            },
+            {
+              "type": "select",
+              "id": "mode",
+              "label": "Table",
+              "options": [
+                {
+                  "value": "categories",
+                  "label": "Categories on the level"
+                },
+                {
+                  "value": "rooms",
+                  "label": "Rooms with areas"
+                }
+              ]
+            },
+            {
+              "type": "library",
+              "id": "wall_type",
+              "label": "Wall type (named in the note)",
+              "kind": "type:wall"
+            },
+            {
+              "type": "selection",
+              "id": "ids",
+              "label": "Selection"
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "widgets": [
+            {
+              "type": "button",
+              "id": "build",
+              "label": "Build House",
+              "function": "build"
+            },
+            {
+              "type": "button",
+              "id": "summarise",
+              "label": "Summarise",
+              "function": "summary"
+            },
+            {
+              "type": "button",
+              "id": "full_report",
+              "label": "Full Report",
+              "function": "check"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "id": "rows",
+          "columns": [
+            {
+              "key": "group",
+              "label": "Group",
+              "width": 80
+            },
+            {
+              "key": "item",
+              "label": "Item",
+              "width": 120
+            },
+            {
+              "key": "value",
+              "label": "Value",
+              "width": 60,
+              "align": "right"
+            }
+          ]
+        },
+        {
+          "type": "text_panel",
+          "id": "details",
+          "height": 180
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "title": "House Report",
+      "order": 2,
+      "dock": "bottom",
+      "on_open": "summary",
+      "refresh": "summary",
+      "widgets": [
+        {
+          "type": "label",
+          "text": "The model at a glance. Full Report opens the Markdown report in a dialog."
+        },
+        {
+          "type": "selection",
+          "id": "ids",
+          "label": "Selection"
+        },
+        {
+          "type": "button",
+          "id": "full_report",
+          "label": "Full Report",
+          "function": "check"
+        },
+        {
+          "type": "text",
+          "id": "note",
+          "label": "Summary",
+          "readonly": true,
+          "multiline": true
+        }
+      ]
+    }
+  ],
   "functions": [
     {
       "id": "build",
       "label": "Build House",
-      "description": "Builds a house: four walls, a floor, a door, a window, a room, a roof and a text note. One undo step.",
+      "description": "Builds a house: four walls, a floor, a door, a window, a room, an optional roof and a text note. One undo step.",
       "params": {
         "type": "object",
         "properties": {
@@ -48,6 +231,10 @@
           "room": {
             "type": "string",
             "description": "The room's name; Living Room without it"
+          },
+          "no_roof": {
+            "type": "boolean",
+            "description": "Builds the walls, floor and openings without a roof"
           }
         }
       },
@@ -67,6 +254,36 @@
       "order": 2
     },
     {
+      "id": "summary",
+      "label": "Summarise",
+      "description": "Reads the model and fills the plugin's panels: a table of the categories on the chosen level or of the rooms with their areas, a note and the error line. No undo step.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "description": "The level the categories are counted on"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "categories",
+              "rooms"
+            ],
+            "description": "What the panel's table lists"
+          },
+          "wall_type": {
+            "type": "string",
+            "description": "A wall type from the library, named in the note"
+          }
+        }
+      },
+      "tab": "Test Plugins",
+      "panel": "House",
+      "order": 3,
+      "ui": "panel"
+    },
+    {
       "id": "open_file",
       "label": "Open File",
       "description": "Opens a project file by absolute path from anywhere on the disk (.bimcraft or .ifc), replacing the project. Needs the `files` permission. Answers with a `report`.",
@@ -84,7 +301,7 @@
       },
       "tab": "Test Plugins",
       "panel": "House",
-      "order": 3
+      "order": 4
     }
   ]
 }
