@@ -1,6 +1,6 @@
 {
   "id": "house-builder",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "name": "House Builder (test)",
   "description": "A test plugin: builds a small house with walls, a floor, a door, a window, a room, a roof and a note, reports on the composition of the model, and offers dockable panels (ABI 2).",
   "abi": 2,
